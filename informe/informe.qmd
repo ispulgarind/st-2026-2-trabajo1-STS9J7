@@ -1,7 +1,196 @@
 ---
-title: "st-2026-2-trabajo1-STS9J7"
-format: html
-editor: visual
+title: "Tarea 1 — Series de tiempo"
+subtitle: "Series de tiempo"
+author:
+  - "Melissa Montoya Urrego"
+  - "Isabela Pulgarin Durango"
+  - "Manuela Ramírez Restrepo"
+institute: "Departamento de Estadística - UNALMED"
+date: today
+lang: es
+df-print: paged
+toc: true
+toc-title: "Contenido"
+number-sections: true
+link-citations: true
+format:
+  html:
+    code-fold: show
+    code-tools: true
+    code-summary: "Mostrar/ocultar código"
+    embed-resources: true
+    theme: flatly
+    smooth-scroll: true
+editor_options:
+  chunk_output_type: inline
 ---
 
-## 
+```{r}
+#| message: false
+#| warning: false
+
+#Cargar las librerias
+library(knitr)
+library(tidyverse)
+library(knitr)
+library(kableExtra)
+```
+
+```{r}
+#Cargar las funciones
+source("../R/00-lectura.R")
+source("../R/01-graficos.R")
+source("../R/02-operadores.R")
+source("../R/03-dependencia.R")
+source("../R/04-metodos.R")
+source("../R/05-evaluacion.R")
+```
+
+
+
+## Las tres series y la pregunta de pronóstico
+
+::: {.panel-tabset}
+
+### Serie 1: Valor promedio semanal de la compra en una cadena de tiendas
+
+```{r}
+serie1 <- leer_serie(
+  "../datos/STS9J7-serie-1.csv",
+  "Almacenes La Ceiba",
+  "miles de pesos"
+)
+
+cat("Nombre: Valor promedio semanal de la compra\n")
+cat("Unidad:", attr(serie1, "unidad"), "\n")
+cat("Frecuencia:", attr(serie1, "frecuencia"), "\n")
+cat("Fecha inicial:", as.character(min(serie1$fecha)), "\n")
+cat("Fecha final:", as.character(max(serie1$fecha)), "\n")
+cat("T:", length(serie1$y), "\n")
+cat("Mínimo:", min(serie1$y), "\n")
+cat("Máximo:", max(serie1$y), "\n")
+cat("Media:", mean(serie1$y), "\n")
+```
+La Serie 1 corresponde al valor promedio semanal de las compras, medido en miles de pesos. Contiene 200 observaciones semanales. Los valores se encuentran entre 451,8 y 577,5 miles de pesos, con una media de 501,0 miles de pesos. La serie abarca el período comprendido entre marzo de 2022 y diciembre de 2025.
+
+**Pregunta:** ¿El valor promedio semanal de las compras durante las próximas 4 semanas estará por debajo de 510 mil pesos? Con base en el pronóstico, se decidirá si el lunes se realiza la inversión de 45 millones de pesos en promoción. El horizonte requerido es (H=4) semanas.
+
+
+### Serie 2: Clientes registrados en una tienda en línea
+
+```{r}
+serie2 <- leer_serie(
+  "../datos/STS9J7-serie-2.csv",
+  "Almacenes La Ceiba",
+  "cientos de clientes"
+)
+
+cat("Nombre: Clientes registrados semanalmente\n")
+cat("Unidad:", attr(serie2, "unidad"), "\n")
+cat("Frecuencia:", attr(serie2, "frecuencia"), "\n")
+cat("Fecha inicial:", as.character(min(serie2$fecha)), "\n")
+cat("Fecha final:", as.character(max(serie2$fecha)), "\n")
+cat("T:", length(serie2$y), "\n")
+cat("Mínimo:", min(serie2$y), "\n")
+cat("Máximo:", max(serie2$y), "\n")
+cat("Media:", mean(serie2$y), "\n")
+```
+La Serie 2 corresponde al número de clientes registrados semanalmente, medido en cientos de clientes. Contiene 180 observaciones semanales y abarca el período comprendido entre julio de 2022 y diciembre de 2025. Los valores se encuentran entre 300 y 440 cientos de clientes, con una media de 369,27 cientos de clientes.
+
+**Pregunta:** ¿Cuántos clientes se espera que estén registrados durante las próximas 6 semanas y se alcanzará la capacidad disponible de la licencia? Esta información permitirá decidir si es necesario adquirir un nuevo bloque de 5.000 clientes con anticipación. El horizonte requerido es (H=6) semanas.
+
+### Serie 3: Ventas diarias de un supermercado de barrio
+
+```{r}
+serie3 <- leer_serie(
+  "../datos/STS9J7-serie-3.csv",
+  "Almacenes La Ceiba",
+  "millones de pesos"
+)
+
+cat("Nombre: Ventas diarias del supermercado\n")
+cat("Unidad:", attr(serie3, "unidad"), "\n")
+cat("Frecuencia:", attr(serie3, "frecuencia"), "\n")
+cat("Fecha inicial:", as.character(min(serie3$fecha)), "\n")
+cat("Fecha final:", as.character(max(serie3$fecha)), "\n")
+cat("T:", length(serie3$y), "\n")
+cat("Mínimo:", min(serie3$y), "\n")
+cat("Máximo:", max(serie3$y), "\n")
+cat("Media:", mean(serie3$y), "\n")
+```
+La Serie 3 corresponde a las ventas diarias del supermercado, medidas en millones de pesos. Contiene 196 observaciones diarias y abarca el período comprendido entre marzo y septiembre de 2025. Los valores se encuentran entre 335,1 y 499,2 millones de pesos, con una media de 406,79 millones de pesos.
+
+**Pregunta:**¿Cuáles serán las ventas diarias durante los próximos 7 días? Estos pronósticos permitirán decidir las cantidades que deben pedirse de frutas, verduras y panadería, considerando que los pedidos se realizan con 2 días de anticipación. El horizonte requerido es (H=7) días.
+
+### Partición de las series
+
+```{r}
+# Calcular n0 para cada serie
+n0_1 <- floor(0.8 * length(serie1$y))
+n0_2 <- floor(0.8 * length(serie2$y))
+n0_3 <- floor(0.8 * length(serie3$y))
+
+# Crear tabla de partición
+particion <- data.frame(
+  Serie = c("Serie 1", "Serie 2", "Serie 3"),
+  
+  T = c(
+    length(serie1$y),
+    length(serie2$y),
+    length(serie3$y)
+  ),
+  
+  n0 = c(n0_1, n0_2, n0_3),
+  
+  H = c("4 semanas", "6 semanas", "7 días"),
+  
+  origen_h1 = c(
+    length(serie1$y) - n0_1,
+    length(serie2$y) - n0_2,
+    length(serie3$y) - n0_3
+  ),
+  
+  origen_H = c(
+    length(serie1$y) - n0_1 - 4 + 1,
+    length(serie2$y) - n0_2 - 6 + 1,
+    length(serie3$y) - n0_3 - 7 + 1
+  ),
+  
+  inicio_estimacion = c(
+    as.character(serie1$fecha[1]),
+    as.character(serie2$fecha[1]),
+    as.character(serie3$fecha[1])
+  ),
+  
+  fin_estimacion = c(
+    as.character(serie1$fecha[n0_1]),
+    as.character(serie2$fecha[n0_2]),
+    as.character(serie3$fecha[n0_3])
+  ),
+  
+  inicio_validacion = c(
+    as.character(serie1$fecha[n0_1 + 1]),
+    as.character(serie2$fecha[n0_2 + 1]),
+    as.character(serie3$fecha[n0_3 + 1])
+  ),
+  
+  fin_validacion = c(
+    as.character(serie1$fecha[length(serie1$y)]),
+    as.character(serie2$fecha[length(serie2$y)]),
+    as.character(serie3$fecha[length(serie3$y)])
+  )
+)
+
+particion
+```
+
+Para la partición de las series se tomó el 80 % de las observaciones como tramo de estimación, de acuerdo con $n_0=\lfloor0,8T\rfloor$. Así, se utilizaron 160 observaciones para estimación en la Serie 1, 144 en la Serie 2 y 156 en la Serie 3. Los horizontes de pronóstico son de 4 semanas, 6 semanas y 7 días, respectivamente.
+
+La evaluación con origen móvil presenta 40, 36 y 40 orígenes para $h=1$, y 37, 31 y 34 orígenes para los horizontes $H$ de las Series 1, 2 y 3, respectivamente. El tramo de validación comienza inmediatamente después de las observaciones utilizadas para estimación y se mantiene separado de esta para evaluar los pronósticos.
+
+
+:::
+
+
+
+
