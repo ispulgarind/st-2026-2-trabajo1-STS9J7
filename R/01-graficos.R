@@ -67,88 +67,95 @@ grafico_rezagos <- function(datos, rezago) {
 }
 
 
-# FUNCIÓN PARA CALCULAR Y GRAFICAR EL CORRELOGRAMA
+#FUNCION CORRELOGRAMA Y PACF
 correlograma <- function(datos, m = NULL) {
   
-  stopifnot(is.numeric(datos))
+  if (!is.numeric(datos)) {
+    stop("La serie debe ser numérica.")
+  }
   
   if (any(is.na(datos))) {
     stop("La serie contiene valores faltantes.")
   }
   
-  T <- length(datos)
+  n <- length(datos)
   
-  if (T < 2) {
+  if (n < 2) {
     stop("La serie debe tener al menos dos observaciones.")
   }
   
   if (is.null(m)) {
-    m <- min(floor(T / 4), 24)
+    m <- min(floor(n / 4), 24)
   }
   
-  if (m < 1 || m >= T) {
-    stop("El número de rezagos debe ser mayor que 0 y menor que T.")
+  if (m < 1 || m >= n) {
+    stop("El número de rezagos debe ser mayor que 0 y menor que n.")
   }
   
-  media <- mean(datos)
+  r <- acf_muestral(datos, m)
   
-  # Calcular la ACF
-  divisor <- sum((datos - media)^2)
+  # Calcular la PACF con Durbin-Levinson
+  pacf_valores <- pacf_dl(r)
   
-  acf_valores <- numeric(m)
+  banda_ruido <- 1.96 / sqrt(n)
+  
+  banda_bartlett <- numeric(m)
   
   for (h in 1:m) {
     
-    numerador <- sum(
-      (datos[(h + 1):T] - media) *
-        (datos[1:(T - h)] - media)
-    )
-    
-    acf_valores[h] <- numerador / divisor
-  }
-  
-  # Calcular la PACF
-  pacf_valores <- numeric(m)
-  
-  for (h in 1:m) {
-    
-    matriz <- matrix(0, h, h)
-    
-    for (i in 1:h) {
-      for (j in 1:h) {
-        matriz[i, j] <- ifelse(i == j, 1, acf_valores[abs(i - j)])
-      }
+    if (h == 1) {
+      suma <- 0
+    } else {
+      suma <- sum(r[1:(h - 1)]^2)
     }
     
-    vector <- acf_valores[1:h]
-    
-    pacf_valores[h] <- solve(matriz, vector)[h]
+    banda_bartlett[h] <- 1.96 *
+      sqrt((1 + 2 * suma) / n)
   }
   
-  # Banda de confianza
-  banda <- 1.96 / sqrt(T)
-  
-  # Datos para los gráficos
+  # Datos para el gráfico ACF
   datos_acf <- data.frame(
     rezago = 1:m,
-    valor = acf_valores
+    valor = r,
+    bartlett = banda_bartlett
   )
   
+  # Datos para el gráfico PACF
   datos_pacf <- data.frame(
     rezago = 1:m,
     valor = pacf_valores
   )
   
-  # Gráfico ACF
   grafico_acf <- ggplot2::ggplot(
     datos_acf,
     ggplot2::aes(x = rezago, y = valor)
   ) +
     ggplot2::geom_hline(yintercept = 0) +
+    
     ggplot2::geom_hline(
-      yintercept = c(-banda, banda),
-      linetype = "dashed"
+      yintercept = c(-banda_ruido, banda_ruido),
+      linetype = "dashed",
+      color = "red"
     ) +
+    
+    ggplot2::geom_line(
+      ggplot2::aes(
+        x = rezago,
+        y = bartlett
+      ),
+      linetype = "dotted",
+      color = "blue"
+    ) +
+    
+    ggplot2::geom_line(
+      ggplot2::aes(
+        x = rezago,
+        y = -bartlett
+      ),
+      linetype = "dotted",
+      color = "blue"
+    ) +
+    
     ggplot2::geom_segment(
       ggplot2::aes(
         xend = rezago,
@@ -157,11 +164,14 @@ correlograma <- function(datos, m = NULL) {
       ),
       color = "purple"
     ) +
+    
     ggplot2::labs(
       title = "ACF",
       x = "Rezago",
-      y = "Autocorrelación"
+      y = "Autocorrelación",
+      caption = "Rojo discontinuo: banda de ruido blanco ±1,96/√n. Azul punteado: banda de Bartlett."
     ) +
+    
     ggplot2::theme_minimal()
   
   # Gráfico PACF
@@ -170,10 +180,13 @@ correlograma <- function(datos, m = NULL) {
     ggplot2::aes(x = rezago, y = valor)
   ) +
     ggplot2::geom_hline(yintercept = 0) +
+    
     ggplot2::geom_hline(
-      yintercept = c(-banda, banda),
-      linetype = "dashed"
+      yintercept = c(-banda_ruido, banda_ruido),
+      linetype = "dashed",
+      color = "red"
     ) +
+    
     ggplot2::geom_segment(
       ggplot2::aes(
         xend = rezago,
@@ -182,11 +195,13 @@ correlograma <- function(datos, m = NULL) {
       ),
       color = "purple"
     ) +
+    
     ggplot2::labs(
       title = "PACF",
       x = "Rezago",
       y = "Autocorrelación parcial"
     ) +
+    
     ggplot2::theme_minimal()
   
   # Unir los gráficos
@@ -198,9 +213,10 @@ correlograma <- function(datos, m = NULL) {
   
   return(
     list(
-      acf = acf_valores,
+      acf = r,
       pacf = pacf_valores,
-      banda = banda,
+      banda_ruido = banda_ruido,
+      banda_bartlett = banda_bartlett,
       grafico = panel
     )
   )
@@ -218,4 +234,123 @@ panel_diagnostico <- function(grafico_serie, resultado_cor) {
   )
   
   return(panel)
+}
+
+
+# GRÁFICA DE OPTIMIZACIÓN
+
+graficar_optimizacion <- function(resultado, parametro, titulo) {
+  
+  grafico <- ggplot2::ggplot(
+    resultado$rejilla,
+    ggplot2::aes(
+      x = .data[[parametro]],
+      y = MSE
+    )
+  ) +
+    ggplot2::geom_line(
+      color = "purple"
+    ) +
+    ggplot2::geom_point(
+      color = "purple"
+    ) +
+    ggplot2::geom_point(
+      data = resultado$optimo,
+      ggplot2::aes(
+        x = .data[[parametro]],
+        y = MSE
+      ),
+      color = "red",
+      size = 4
+    ) +
+    ggplot2::labs(
+      title = titulo,
+      x = parametro,
+      y = "MSE"
+    ) +
+    ggplot2::theme_minimal()
+  
+  return(grafico)
+}
+
+
+# MAPA DE OPTIMIZACIÓN DE HOLT
+
+graficar_holt <- function(resultado) {
+  
+  grafico <- ggplot2::ggplot(
+    resultado$rejilla,
+    ggplot2::aes(
+      x = alpha,
+      y = beta,
+      fill = MSE
+    )
+  ) +
+    ggplot2::geom_tile() +
+    ggplot2::scale_fill_gradient(
+      low = "lavender",
+      high = "purple"
+    ) +
+    ggplot2::geom_point(
+      data = resultado$optimo,
+      ggplot2::aes(
+        x = alpha,
+        y = beta
+      ),
+      color = "red",
+      size = 4
+    ) +
+    ggplot2::labs(
+      title = "MSE según alpha y beta - Holt",
+      x = "alpha",
+      y = "beta",
+      fill = "MSE"
+    ) +
+    ggplot2::theme_minimal()
+  
+  return(grafico)
+}
+
+
+# MAPA DE OPTIMIZACIÓN DE HOLT-WINTERS
+graficar_hw <- function(resultado, titulo) {
+  
+  gamma_optimo <- resultado$optimo$gamma
+  
+  datos <- resultado$rejilla[
+    resultado$rejilla$gamma == gamma_optimo,
+  ]
+  
+  grafico <- ggplot2::ggplot(
+    datos,
+    ggplot2::aes(
+      x = alpha,
+      y = beta,
+      fill = MSE
+    )
+  ) +
+    ggplot2::geom_tile() +
+    ggplot2::scale_fill_gradient(
+      low = "lavender",
+      high = "purple"
+    ) +
+    ggplot2::geom_point(
+      data = resultado$optimo,
+      ggplot2::aes(
+        x = alpha,
+        y = beta
+      ),
+      color = "red",
+      size = 4
+    ) +
+    ggplot2::labs(
+      title = titulo,
+      subtitle = paste("gamma óptimo =", gamma_optimo),
+      x = "alpha",
+      y = "beta",
+      fill = "MSE"
+    ) +
+    ggplot2::theme_minimal()
+  
+  return(grafico)
 }
