@@ -46,12 +46,9 @@ source("../R/04-metodos.R")
 source("../R/05-evaluacion.R")
 ```
 
-
-
 ## Las tres series y la pregunta de pronóstico
 
-::: {.panel-tabset}
-
+::: panel-tabset
 ### Serie 1: Valor promedio semanal de la compra en una cadena de tiendas
 
 ```{r}
@@ -71,10 +68,10 @@ cat("Mínimo:", min(serie1$y), "\n")
 cat("Máximo:", max(serie1$y), "\n")
 cat("Media:", mean(serie1$y), "\n")
 ```
+
 La Serie 1 corresponde al valor promedio semanal de las compras, medido en miles de pesos. Contiene 200 observaciones semanales. Los valores se encuentran entre 451,8 y 577,5 miles de pesos, con una media de 501,0 miles de pesos. La serie abarca el período comprendido entre marzo de 2022 y diciembre de 2025.
 
 **Pregunta:** ¿El valor promedio semanal de las compras durante las próximas 4 semanas estará por debajo de 510 mil pesos? Con base en el pronóstico, se decidirá si el lunes se realiza la inversión de 45 millones de pesos en promoción. El horizonte requerido es (H=4) semanas.
-
 
 ### Serie 2: Clientes registrados en una tienda en línea
 
@@ -95,6 +92,7 @@ cat("Mínimo:", min(serie2$y), "\n")
 cat("Máximo:", max(serie2$y), "\n")
 cat("Media:", mean(serie2$y), "\n")
 ```
+
 La Serie 2 corresponde al número de clientes registrados semanalmente, medido en cientos de clientes. Contiene 180 observaciones semanales y abarca el período comprendido entre julio de 2022 y diciembre de 2025. Los valores se encuentran entre 300 y 440 cientos de clientes, con una media de 369,27 cientos de clientes.
 
 **Pregunta:** ¿Cuántos clientes se espera que estén registrados durante las próximas 6 semanas y se alcanzará la capacidad disponible de la licencia? Esta información permitirá decidir si es necesario adquirir un nuevo bloque de 5.000 clientes con anticipación. El horizonte requerido es (H=6) semanas.
@@ -118,6 +116,7 @@ cat("Mínimo:", min(serie3$y), "\n")
 cat("Máximo:", max(serie3$y), "\n")
 cat("Media:", mean(serie3$y), "\n")
 ```
+
 La Serie 3 corresponde a las ventas diarias del supermercado, medidas en millones de pesos. Contiene 196 observaciones diarias y abarca el período comprendido entre marzo y septiembre de 2025. Los valores se encuentran entre 335,1 y 499,2 millones de pesos, con una media de 406,79 millones de pesos.
 
 **Pregunta:**¿Cuáles serán las ventas diarias durante los próximos 7 días? Estos pronósticos permitirán decidir las cantidades que deben pedirse de frutas, verduras y panadería, considerando que los pedidos se realizan con 2 días de anticipación. El horizonte requerido es (H=7) días.
@@ -187,9 +186,170 @@ particion
 Para la partición de las series se tomó el 80 % de las observaciones como tramo de estimación, de acuerdo con $n_0=\lfloor0,8T\rfloor$. Así, se utilizaron 160 observaciones para estimación en la Serie 1, 144 en la Serie 2 y 156 en la Serie 3. Los horizontes de pronóstico son de 4 semanas, 6 semanas y 7 días, respectivamente.
 
 La evaluación con origen móvil presenta 40, 36 y 40 orígenes para $h=1$, y 37, 31 y 34 orígenes para los horizontes $H$ de las Series 1, 2 y 3, respectivamente. El tramo de validación comienza inmediatamente después de las observaciones utilizadas para estimación y se mantiene separado de esta para evaluar los pronósticos.
-
-
 :::
+
+## Descripción y patrón
+
+## Operador de rezago
+
+### Ecuaciones en diferencias de Holt y Holt-Winters
+
+Pronóstico de Holt
+
+La función de pronóstico de Holt es
+
+$$
+\hat Y_{T+h}=L_T+\hat T_T h.
+$$
+
+Para aplicar el operador de rezago, consideramos que este actúa sobre (h), de modo que
+
+$$
+B\hat Y_{T+h}=\hat Y_{T+h-1}.
+$$
+
+Primero aplicamos el operador (1-B):
+$$
+\hat Y_{T+h}-\hat Y_{T+h-1}.
+$$
+
+Reemplazando la función de pronóstico:
+
+$$(L_T+\hat T_T h)$$
+$$
+(L_T+\hat T_T(h-1)).
+$$
+
+Simplificando:
+
+$$
+\hat T_T.
+$$
+
+Por lo tanto, después de una diferencia queda una constante. Aplicamos nuevamente el operador (1-B):
+
+$$
+(1-B)\hat T_T.
+$$
+
+Como $\hat T_T$ es constante respecto a (h),
+
+$$
+\hat T_T-\hat T_T=0.
+$$
+
+Por tanto,
+
+$$
+\boxed{(1-B)^2\hat Y_{T+h}=0}
+$$
+
+para (h\geq3).
+
+La ecuación en diferencias asociada es
+
+$$
+(1-B)^2Y_h=0.
+$$
+
+Su polinomio característico es
+
+$$
+(1-r)^2=0,
+$$
+
+por lo que la única raíz es (r=1), con multiplicidad 2. La solución general es
+
+$$
+\boxed{Y_h=A+Bh}.
+$$
+
+Esta solución representa una tendencia lineal. Por tanto, la raíz (r=1), al estar repetida, corresponde a la componente de tendencia.
+
+Pronóstico de Holt-Winters aditivo
+
+El pronóstico de Holt-Winters aditivo es
+$$
+L_T+\hat T_T h+
+S_{T+h-s\lceil h/s\rceil}.
+$$
+
+Este pronóstico tiene dos componentes: una tendencia lineal y una componente estacional que se repite cada (s) períodos.
+
+Aplicamos primero el operador estacional (1-B^s).
+
+Para la parte de tendencia:
+$$
+(L_T+\hat T_T h)
+$$
+$$
+(L_T+\hat T_T(h-s)).
+$$
+
+Simplificando:
+
+$$
+s\hat T_T.
+$$
+
+Como $s\hat T_T$ es una constante, al aplicar después (1-B) obtenemos
+
+$$s\hat T_T-s\hat T_T=0.$$
+
+
+Ahora consideramos la componente estacional. Como esta se repite cada (s) períodos,
+
+$$
+B^sS_h=S_{h-s}=S_h.
+$$
+
+Por lo tanto,
+
+$$
+S_h-S_{h-s}=0.
+$$
+
+Así, el operador (1-B^s) elimina la componente estacional y deja una constante en la parte de tendencia. Al aplicar después (1-B), también se elimina esta constante.
+
+Por tanto,
+
+$$
+\boxed{(1-B)(1-B^s)\hat Y_{T+h}=0}
+$$
+
+para $h\geq s+2$.
+
+La ecuación en diferencias asociada es
+
+$$
+(1-B)(1-B^s)Y_h=0.
+$$
+
+Su polinomio característico es
+
+$$
+(1-r)(1-r^s)=0.
+$$
+
+Las raíces corresponden a $r=1$ y a las soluciones de $r^s=1$
+
+
+La raíz (r=1) aparece dos veces y corresponde a la tendencia lineal. Las demás raíces de (r^s=1), que son las raíces (s)-ésimas de la unidad distintas de (1), corresponden a la componente estacional.
+
+En consecuencia, la solución general puede expresarse como
+
+$$
+\boxed{
+Y_h=A+Bh+
+\sum_{j=1}^{s-1}C_j e^{2\pi ijh/s}
+}
+$$
+
+donde (A+Bh) representa la tendencia y los términos restantes representan la estacionalidad de período (s).
+
+
+
+
 
 
 
